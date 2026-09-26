@@ -1,0 +1,21 @@
+{
+  "name": "devgrowth-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sync API and web dashboard for the devgrowth CLI",
+  "type": "module",
+  "workspaces": [
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w server",
+    "start": "npm start -w server",
+    "migrate": "npm run migrate -w server",
+    "test": "npm test -w server"
+  },
+  "license": "MIT",
+  "author": "EhDohWah <ehdohwah007@gmail.com>",
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
