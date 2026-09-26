@@ -22,5 +22,7 @@ COPY server/scripts server/scripts
 COPY --from=build /app/web/dist web/dist
 USER node
 EXPOSE 3000
-# Run migrations as a release step: `node server/scripts/migrate.js`
-CMD ["node", "server/src/server.js"]
+# Apply any pending migrations, then start. Migrations are idempotent, so this is
+# safe on every start and a fresh database gets its tables before the first
+# request. `exec` hands PID 1 to node so SIGTERM reaches its graceful shutdown.
+CMD ["sh", "-c", "node server/scripts/migrate.js && exec node server/src/server.js"]

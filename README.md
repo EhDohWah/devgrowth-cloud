@@ -38,7 +38,7 @@ npm run build                         # writes web/dist
 npm start                             # API + dashboard on http://localhost:3000
 ```
 
-The `Dockerfile` builds that same single service. It hasn't been tested yet, because no Docker daemon was available.
+The `Dockerfile` builds that same single service and applies pending migrations on every start, so a fresh database needs no manual step. Set `DATABASE_URL`, and `TRUST_PROXY=true` when running behind a proxy such as Render. The Dockerfile's steps have been replayed without Docker, against an empty Postgres, but the image itself hasn't been built with Docker yet.
 
 ## Tests
 
