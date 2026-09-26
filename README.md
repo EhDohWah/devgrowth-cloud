@@ -1,9 +1,9 @@
 # devgrowth-cloud
 
-The sync API, and later the web dashboard, for the [devgrowth CLI](https://github.com/EhDohWah/devgrowth). It lets every device that runs `devgrowth` share the same sessions, streaks, milestones and config.
+The sync API and web dashboard for the [devgrowth CLI](https://github.com/EhDohWah/devgrowth). It lets every device that runs `devgrowth` share the same sessions, streaks, milestones and config.
 
 - **server/**: Fastify + Postgres. It is a per-user event store, and it never computes stats itself.
-- **web/**: a Vue 3 dashboard (coming in step 4). Fastify serves it from the same origin.
+- **web/**: a Vue 3 dashboard. It shows your streaks, this week, your history and your milestones. You can tick milestones, edit your schedule and revoke devices. In production, Fastify serves it from the same origin as the API.
 
 Both sides replay events through [`devgrowth-core`](https://github.com/EhDohWah/devgrowth/tree/main/packages/core), so the CLI, the server and the dashboard all agree on the numbers. The API is documented in [`docs/api.md`](docs/api.md).
 
@@ -27,13 +27,26 @@ Then check it:
 curl localhost:3000/health            # {"status":"ok"}
 ```
 
+To work on the dashboard, run it in a second terminal:
+```bash
+npm run dev:web                       # http://localhost:5173, proxies /v1 to :3000
+```
+
+For production, build the dashboard and let the server host it:
+```bash
+npm run build                         # writes web/dist
+npm start                             # API + dashboard on http://localhost:3000
+```
+
+The `Dockerfile` builds that same single service. It needs `package-lock.json`, which is committed only once `devgrowth-core` is on npm. It hasn't been tested yet, because no Docker daemon was available.
+
 ## Tests
 
 ```bash
 npm test
 ```
 
-The tests run against the **real** Postgres test database (`TEST_DATABASE_URL`, which defaults to `devgrowth_test` on port 5433). They truncate every table, so the helper refuses to run against any database whose name doesn't end in `_test`.
+This runs the server tests (`node:test`) and then the dashboard tests (Vitest and jsdom). The server tests run against the **real** Postgres test database (`TEST_DATABASE_URL`, which defaults to `devgrowth_test` on port 5433). They truncate every table, so the helper refuses to run against any database whose name doesn't end in `_test`.
 
 ## Working on `devgrowth-core` at the same time
 

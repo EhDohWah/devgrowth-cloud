@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repo is the cloud half of devgrowth:
 - a Fastify + Postgres sync API (`server/`).
-- a Vue 3 dashboard (`web/`, step 4), which Fastify serves in production.
+- a Vue 3 dashboard (`web/`), which Fastify serves in production from `web/dist`.
 
 The CLI lives in a separate repo, `EhDohWah/devgrowth`. Both repos depend on the **`devgrowth-core`** npm package, whose source is in that repo under `packages/core`. It provides `validateEvent`, `SCHEMA_VERSION` and `deriveState`. **Never copy core logic into this repo.** Every client must replay events through the identical reducers, or the numbers drift between devices.
 
@@ -14,10 +14,12 @@ The CLI lives in a separate repo, `EhDohWah/devgrowth`. Both repos depend on the
 
 ```bash
 docker compose up -d        # Postgres 16 on :5433, creates devgrowth + devgrowth_test
-npm install                 # root workspace; installs server deps
+npm install                 # root workspace; installs server + web deps
 npm run migrate             # applies server/migrations/*.sql not yet in schema_migrations
 npm run dev                 # node --watch server/src/server.js
-npm test                    # node:test against the real devgrowth_test database
+npm run dev:web             # Vite on :5173, proxies /v1 and /health to :3000
+npm run build               # web/dist, which the server hosts at /
+npm test                    # server (node:test, real devgrowth_test DB), then web (vitest + jsdom)
 ```
 
 Single file or test (from `server/`):
@@ -42,6 +44,29 @@ The tests use `node:test`, not Jest. They need no mocking, run ESM natively, and
 - **Idempotency key is `(user_id, id)`.** The insert uses `ON CONFLICT DO NOTHING`, so a retried push reports `duplicates` instead of double-counting.
 - **The per-user advisory lock around inserts is load-bearing.** `server_seq` is assigned at insert time but becomes visible at commit. Without `pg_advisory_xact_lock(hashtextextended(user_id::text, 0))`, two concurrent pushes can commit out of order, and a cursor-based puller skips a row forever. The test `a push waits for an in-flight push by the same user` fails if the lock is removed.
 - **The server never derives stats.** Clients do that with `deriveState`. Don't add endpoints that compute streaks server-side.
+
+### Dashboard (`web/`)
+
+The dashboard is **just another sync client**, not a view over server-computed data.
+
+- **`stores/events.js`**
+  - Pulls `/v1/events` from a cursor.
+  - Exposes `state = deriveState(events)` from `devgrowth-core`, so its numbers match `devgrowth status` exactly.
+  - Never compute stats any other way.
+- **Edits are events.** `addEvent()` validates with core's `assertValidEvent`, applies the event optimistically, and rolls it back if the push fails.
+  - Milestones push `milestone_check`, which is irreversible, so the UI asks for confirmation first.
+  - Settings pushes a `config_snapshot` holding the **full** config, because snapshots are last-writer-wins, not merges.
+- **Dates:** anything that decides "which day or week is this" goes through core's `getSessionDate`, `getWeekStart` and `toDateKey`, exactly as the CLI does. For example, 02:00 on Tuesday is Monday's session.
+- **`api.js`:**
+  - Always sends `X-Requested-With: devgrowth-web`; the server requires it for cookie writes.
+  - A 401 from anything except `/v1/auth/*` and `/v1/me` triggers the global sign-out redirect.
+- **User-written text** (log messages, resources) is rendered with `{{ }}`, **never `v-html`**.
+- **Styling:**
+  - Plain CSS tokens are in `src/styles.css`. The dark theme is set with `prefers-color-scheme`.
+  - The chart color `--series-1` comes from the dataviz reference palette and was validated against both surfaces.
+  - Grid children need `min-width: 0` (already set on `.stack`, `.grid-3` and `.grid-4`). Without it, the chart's SVG widens the page on phones.
+- **Tests:**
+  - `web/tests/` uses `vi.mock('../src/api.js')`, then dynamic imports, and `setActivePinia(createPinia())` in `beforeEach`.
 
 ## `devgrowth-core` dependency
 
