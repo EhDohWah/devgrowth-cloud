@@ -38,7 +38,7 @@ npm run build                         # writes web/dist
 npm start                             # API + dashboard on http://localhost:3000
 ```
 
-The `Dockerfile` builds that same single service. It needs `package-lock.json`, which is committed only once `devgrowth-core` is on npm. It hasn't been tested yet, because no Docker daemon was available.
+The `Dockerfile` builds that same single service and applies pending migrations on every start, so a fresh database needs no manual step. Set `DATABASE_URL`, and `TRUST_PROXY=true` when running behind a proxy such as Render. The Dockerfile's steps have been replayed without Docker, against an empty Postgres, but the image itself hasn't been built with Docker yet.
 
 ## Tests
 
@@ -50,7 +50,7 @@ This runs the server tests (`node:test`) and then the dashboard tests (Vitest an
 
 ## Working on `devgrowth-core` at the same time
 
-`devgrowth-core` lives in the CLI repo, under `packages/core`. To test unpublished core changes here, link it:
+`devgrowth-core` is installed from npm like any other dependency. Its source lives in the CLI repo, under `packages/core`. To try core changes here before they are published, link it:
 
 ```bash
 # in the devgrowth (CLI) repo
