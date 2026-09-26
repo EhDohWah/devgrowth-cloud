@@ -70,5 +70,5 @@ The dashboard is **just another sync client**, not a view over server-computed d
 
 ## `devgrowth-core` dependency
 
-- Until `devgrowth-core` is published, `npm install` fails with a 404 for it. Link the local copy as the README describes.
-- No `package-lock.json` is committed yet, because it can't include core until core is on npm. Generate and commit it right after the first publish.
+- `devgrowth-core` is installed from npm (pinned in `package-lock.json`). To test unpublished core changes, `npm link` the CLI repo's `packages/core` as the README describes, then run `npm install` to go back to the published version. Never commit a lockfile generated while core was linked.
+- **Release order:** publish a new `devgrowth-core` first, then bump the range in `server/package.json` and `web/package.json`, run `npm install` to update the lockfile, and deploy.

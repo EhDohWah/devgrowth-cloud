@@ -1,6 +1,4 @@
 # One service: Fastify serves the API and the built dashboard from the same origin.
-# Requires package-lock.json, which is committed once devgrowth-core is published
-# to npm (until then `npm ci` cannot resolve it).
 
 FROM node:22-alpine AS build
 WORKDIR /app
