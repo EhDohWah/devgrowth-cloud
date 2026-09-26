@@ -5,13 +5,16 @@
   "description": "Sync API and web dashboard for the devgrowth CLI",
   "type": "module",
   "workspaces": [
-    "server"
+    "server",
+    "web"
   ],
   "scripts": {
     "dev": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "build": "npm run build -w web",
     "start": "npm start -w server",
     "migrate": "npm run migrate -w server",
-    "test": "npm test -w server"
+    "test": "npm test -w server && npm test -w web"
   },
   "license": "MIT",
   "author": "EhDohWah <ehdohwah007@gmail.com>",
