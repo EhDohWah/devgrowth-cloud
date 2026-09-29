@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref, shallowRef } from 'vue';
 import { deriveState } from 'devgrowth-core/derive';
-import { SCHEMA_VERSION, assertValidEvent } from 'devgrowth-core/events';
+import { assertValidEvent, eventVersion } from 'devgrowth-core/events';
 import { api } from '../api.js';
 
 /**
@@ -57,7 +57,8 @@ export const useEventsStore = defineStore('events', () => {
     const event = assertValidEvent({
       id: crypto.randomUUID(),
       type,
-      v: SCHEMA_VERSION,
+      // The version that introduced this type, so an older server still accepts it.
+      v: eventVersion(type),
       occurredAt: new Date().toISOString(),
       payload
     });

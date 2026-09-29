@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { deriveState } from 'devgrowth-core/derive';
-import { session } from './fixtures.js';
+import { session, uuid } from './fixtures.js';
 
 vi.mock('../src/api.js', () => ({ api: { get: vi.fn(), post: vi.fn(), del: vi.fn() } }));
 const { api } = await import('../src/api.js');
@@ -89,5 +89,26 @@ describe('events store', () => {
     api.get.mockResolvedValueOnce({ events: [{ ...event, serverSeq: 1 }], nextCursor: 1, hasMore: false });
     await store.sync();
     expect(store.events).toHaveLength(1);
+  });
+  test('a synced session_delete removes the session and recomputes the stats', async () => {
+    const a = session('2026-08-10', '2026-08-10');
+    const b = session('2026-08-11', '2026-08-10');
+    const del = { id: uuid(), type: 'session_delete', v: 2, occurredAt: '2026-08-12T10:00:00.000Z', payload: { targetId: b.id } };
+    api.get.mockResolvedValueOnce({ events: [a, b, del], nextCursor: 3, hasMore: false });
+    const store = useEventsStore();
+    await store.sync();
+    expect(store.state.sessions.map(s => s.id)).toEqual([a.id]);
+    expect(store.state.stats.totalSessions).toBe(1);
+    expect(store.state.stats.currentWeek.completed).toBe(1);
+  });
+
+  test('a synced session_edit replaces the message and marks the session edited', async () => {
+    const a = session('2026-08-10', '2026-08-10');
+    const edit = { id: uuid(), type: 'session_edit', v: 2, occurredAt: '2026-08-12T10:00:00.000Z', payload: { targetId: a.id, message: 'Fixed wording.' } };
+    api.get.mockResolvedValueOnce({ events: [a, edit], nextCursor: 2, hasMore: false });
+    const store = useEventsStore();
+    await store.sync();
+    expect(store.state.sessions[0]).toMatchObject({ message: 'Fixed wording.', edited: true });
+    expect(store.state.stats.totalSessions).toBe(1);
   });
 });

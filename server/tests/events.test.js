@@ -241,6 +241,79 @@ describe('multi-device sync end to end', () => {
   });
 });
 
+function deleteEvent(targetId, overrides = {}) {
+  return { id: randomUUID(), type: 'session_delete', v: 2, occurredAt: '2026-08-20T09:00:00.000Z', payload: { targetId }, ...overrides };
+}
+
+function editEvent(targetId, message, overrides = {}) {
+  return { id: randomUUID(), type: 'session_edit', v: 2, occurredAt: '2026-08-20T09:00:00.000Z', payload: { targetId, message }, ...overrides };
+}
+
+describe('session_delete and session_edit', () => {
+  test('are stored and served, and replaying them removes and rewrites sessions', async () => {
+    const { auth } = await registerCli(app);
+    const keep = sessionEvent('2026-08-10', '2026-08-10');
+    const mistake = sessionEvent('2026-08-11', '2026-08-10');
+    const edit = editEvent(keep.id, 'Reworded after the fact.');
+    const del = deleteEvent(mistake.id);
+
+    const res = await push(auth, [keep, mistake, edit, del]);
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.json().accepted, [keep.id, mistake.id, edit.id, del.id]);
+
+    const pulled = await pullAll(auth);
+    assert.deepEqual(pulled.map(e => [e.type, e.v]), [['session', 1], ['session', 1], ['session_edit', 2], ['session_delete', 2]]);
+
+    // What a client does with them.
+    const state = deriveState(pulled);
+    assert.equal(state.sessions.length, 1);
+    assert.equal(state.sessions[0].message, 'Reworded after the fact.');
+    assert.equal(state.sessions[0].edited, true);
+    assert.equal(state.stats.totalSessions, 1);
+    assert.equal(state.stats.currentWeek.completed, 1);
+  });
+
+  test('a delete that arrives from a second device applies to the first device\'s sessions', async () => {
+    const laptop = await registerCli(app);
+    const desktopToken = (await login(app)).json().token;
+    const desktop = { authorization: `Bearer ${desktopToken}` };
+    const session = sessionEvent('2026-08-10', '2026-08-10');
+
+    await push(laptop.auth, [session]);
+    await push(desktop, [deleteEvent(session.id)]);
+
+    for (const auth of [laptop.auth, desktop]) {
+      assert.equal(deriveState(await pullAll(auth)).stats.totalSessions, 0);
+    }
+  });
+
+  test('are validated like every other event', async () => {
+    const { auth } = await registerCli(app);
+    const target = randomUUID();
+    const cases = [
+      ['a delete stamped v1', deleteEvent(target, { v: 1 }), /require v >= 2/],
+      ['a delete without a UUID target', deleteEvent('not-a-uuid'), /targetId/],
+      ['an edit with a blank message', editEvent(target, '   '), /message/],
+      ['a schema newer than this server knows', deleteEvent(target, { v: 3 }), /newer than supported/]
+    ];
+    for (const [label, event, expected] of cases) {
+      const res = await push(auth, [event]);
+      assert.equal(res.statusCode, 400, label);
+      assert.equal(res.json().error.code, 'invalid_event', label);
+      assert.match(res.json().error.details[0].errors.join(' '), expected, label);
+    }
+    assert.equal((await pull(auth)).json().events.length, 0);
+  });
+
+  test('a retried delete is a duplicate, not a second tombstone', async () => {
+    const { auth } = await registerCli(app);
+    const del = deleteEvent(randomUUID());
+    await push(auth, [del]);
+    const again = await push(auth, [del]);
+    assert.deepEqual(again.json(), { accepted: [], duplicates: [del.id] });
+  });
+});
+
 describe('GET /v1/me eventCount', () => {
   test('counts only the caller\'s events', async () => {
     const { auth } = await registerCli(app);

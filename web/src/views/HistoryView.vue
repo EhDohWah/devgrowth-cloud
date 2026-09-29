@@ -89,7 +89,7 @@ function clear() {
             <span v-if="s.resource" class="muted small">{{ s.resource }}</span>
           </div>
           <!-- User-written text: always rendered as text, never as HTML. -->
-          <p class="message">{{ s.message }}</p>
+          <p class="message">{{ s.message }}<span v-if="s.edited" class="muted small edited" data-test="edited"> (edited)</span></p>
         </li>
       </ul>
     </section>
