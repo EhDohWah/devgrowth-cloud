@@ -2,6 +2,8 @@
 
 All request and response bodies are JSON. The event format (types, payloads, and derivation rules) is specified in `devgrowth-core`'s [`SYNC_API.md`](https://github.com/EhDohWah/devgrowth/blob/main/packages/core/SYNC_API.md). This file covers the transport only.
 
+The server accepts events with `v` up to 2. `session_delete` and `session_edit` are `v: 2` (migration `002` widens the `events.type` CHECK); every other type stays `v: 1`. The server never interprets them: clients apply deletes and edits when replaying.
+
 ## Errors
 
 Every error has the same shape:
