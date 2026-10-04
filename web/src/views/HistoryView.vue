@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { useEventsStore } from '../stores/events.js';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { shortDateFromKey, fromDateKey, DAY_NAMES } from '../dates.js';
 
 const events = useEventsStore();
@@ -36,6 +37,67 @@ const groups = computed(() => {
 function dayLabel(key) {
   const d = fromDateKey(key);
   return `${DAY_NAMES[(d.getDay() + 6) % 7]}, ${shortDateFromKey(key)}`;
+}
+
+// Same rule as the CLI's logger.normalizeMessage: a log is one line in the
+// Markdown week files, so newlines are collapsed before the edit is recorded.
+function normalizeMessage(message) {
+  return String(message).replace(/\s*\r?\n\s*/g, ' ').trim();
+}
+
+const editingId = ref(null);
+const draft = ref('');
+const editError = ref('');
+const saving = ref(false);
+
+async function startEdit(s) {
+  editingId.value = s.id;
+  draft.value = s.message;
+  editError.value = '';
+  await nextTick();
+  document.querySelector(`[data-edit-input="${s.id}"]`)?.focus();
+}
+
+function cancelEdit() {
+  editingId.value = null;
+  editError.value = '';
+}
+
+async function saveEdit(s) {
+  const message = normalizeMessage(draft.value);
+  if (!message) {
+    editError.value = "The message can't be empty.";
+    return;
+  }
+  if (message === s.message) {
+    cancelEdit();
+    return;
+  }
+  saving.value = true;
+  try {
+    await events.addEvent('session_edit', { targetId: s.id, message });
+    cancelEdit();
+  } catch {
+    // The store rolls back and shows the error banner; keep the draft open.
+  } finally {
+    saving.value = false;
+  }
+}
+
+const pendingDelete = ref(null);
+const deleting = ref(false);
+
+async function confirmDelete() {
+  const target = pendingDelete.value;
+  deleting.value = true;
+  try {
+    await events.addEvent('session_delete', { targetId: target.id });
+  } catch {
+    // The store rolls back and shows the error banner.
+  } finally {
+    deleting.value = false;
+    pendingDelete.value = null;
+  }
 }
 
 function clear() {
@@ -88,11 +150,58 @@ function clear() {
             <span class="muted small"><span aria-hidden="true">{{ STATUS_ICON[s.status] }}</span> {{ s.status }} · {{ s.duration }} min</span>
             <span v-if="s.resource" class="muted small">{{ s.resource }}</span>
           </div>
-          <!-- User-written text: always rendered as text, never as HTML. -->
-          <p class="message">{{ s.message }}<span v-if="s.edited" class="muted small edited" data-test="edited"> (edited)</span></p>
+          <form v-if="editingId === s.id" class="edit" data-test="edit-form" @submit.prevent="saveEdit(s)">
+            <label class="sr-only" :for="`edit-${s.id}`">Log message</label>
+            <textarea
+              :id="`edit-${s.id}`"
+              v-model="draft"
+              :data-edit-input="s.id"
+              rows="3"
+              maxlength="2000"
+              @keydown.esc="cancelEdit"
+              @keydown.enter.exact.prevent="saveEdit(s)"
+            />
+            <p v-if="editError" class="error-text" role="alert">{{ editError }}</p>
+            <div class="row-actions">
+              <button type="button" class="btn btn-ghost" data-test="edit-cancel" @click="cancelEdit">Cancel</button>
+              <button type="submit" class="btn" data-test="edit-save" :disabled="saving">Save</button>
+            </div>
+          </form>
+          <template v-else>
+            <!-- User-written text: always rendered as text, never as HTML. -->
+            <p class="message">{{ s.message }}<span v-if="s.edited" class="muted small edited" data-test="edited"> (edited)</span></p>
+            <div class="row-actions">
+              <button type="button" class="link-btn" data-test="edit" :aria-label="`Edit log from ${dayLabel(s.sessionDate)}`" @click="startEdit(s)">Edit</button>
+              <button
+                v-if="!s.inBaseline"
+                type="button"
+                class="link-btn danger"
+                data-test="delete"
+                :aria-label="`Delete log from ${dayLabel(s.sessionDate)}`"
+                @click="pendingDelete = s"
+              >Delete</button>
+              <span v-else class="muted small" data-test="baseline-note" title="Its totals were imported when this account was first synced, so it can't be subtracted.">Recorded before sync · can't delete</span>
+            </div>
+          </template>
         </li>
       </ul>
     </section>
+
+    <ConfirmDialog
+      :open="pendingDelete !== null"
+      title="Delete this log?"
+      message="Your stats are recalculated without it, on every device. This can't be undone."
+      confirm-label="Delete"
+      danger
+      :busy="deleting"
+      @confirm="confirmDelete"
+      @cancel="pendingDelete = null"
+    >
+      <blockquote v-if="pendingDelete" class="quote" data-test="delete-preview">
+        <span class="muted small">{{ dayLabel(pendingDelete.sessionDate) }} · <span class="skill">{{ pendingDelete.skill }}</span></span>
+        <span class="message">{{ pendingDelete.message }}</span>
+      </blockquote>
+    </ConfirmDialog>
   </div>
 </template>
 
@@ -107,4 +216,18 @@ function clear() {
 .date { font-weight: 600; }
 .skill { text-transform: capitalize; font-weight: 500; }
 .message { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.row-actions { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 6px; flex-wrap: wrap; }
+.link-btn {
+  font: inherit; font-size: 0.875rem; background: none; border: 0; padding: 2px 4px; border-radius: 6px;
+  color: var(--accent); cursor: pointer;
+}
+.link-btn:hover { text-decoration: underline; }
+.link-btn.danger { color: var(--bad); }
+.edit { margin-top: 8px; display: grid; gap: 6px; }
+.edit textarea {
+  font: inherit; width: 100%; box-sizing: border-box; resize: vertical; padding: 8px 10px;
+  color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+}
+.edit .row-actions { margin-top: 0; }
+.quote { margin: 12px 0 0; padding: 8px 12px; border-left: 3px solid var(--border); background: var(--surface-2); border-radius: 6px; display: grid; gap: 2px; }
 </style>
