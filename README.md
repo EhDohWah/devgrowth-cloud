@@ -3,7 +3,7 @@
 The sync API and web dashboard for the [devgrowth CLI](https://github.com/EhDohWah/devgrowth). It lets every device that runs `devgrowth` share the same sessions, streaks, milestones and config.
 
 - **server/**: Fastify + Postgres. It is a per-user event store, and it never computes stats itself.
-- **web/**: a Vue 3 dashboard. It shows your streaks, this week, your history and your milestones. You can tick milestones, edit your schedule and revoke devices. In production, Fastify serves it from the same origin as the API.
+- **web/**: a Vue 3 dashboard. It shows your streaks, this week, your history and your milestones. You can edit or delete a log entry, tick milestones, edit your schedule and revoke devices. In production, Fastify serves it from the same origin as the API.
 
 Both sides replay events through [`devgrowth-core`](https://github.com/EhDohWah/devgrowth/tree/main/packages/core), so the CLI, the server and the dashboard all agree on the numbers. The API is documented in [`docs/api.md`](docs/api.md).
 
